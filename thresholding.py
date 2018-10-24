@@ -1,51 +1,67 @@
 import cv2 as cv
 import numpy as np
-from matplotlib import pyplot as plt
 from cielab import rgbToCielab
-from backgroundRemover import removeBackground, remove_by_k_means
-from utils import show_image
-import os
+from backgroundRemover import removeBackground
+import ntpath
 
-imageName = 'a1.jpg'
-image = cv.imread(imageName)
-image = removeBackground(image)
-# image = cv.medianBlur(image, 5)
+def path_leaf(path):
+    head, tail = ntpath.split(path)
+    return tail or ntpath.basename(head)
 
-image = rgbToCielab(image) * 255
-cielabImagePathName = imageName.split('.')[0] + "_cielab" + '.png'
-cv.imwrite(cielabImagePathName, image)
+def segment_image(imageName, pixel_size, x, y, width, height):
 
-image = cv.imread(cielabImagePathName)
-os.remove(cielabImagePathName)
+    image = cv.imread(imageName)
+    image = image[y: y + height, x: x + width]
 
-Z = image.reshape((-1, 3))
-Z = np.float32(Z)
+    image, leaf_pixel_count = removeBackground(image)
+    semb = imageName.split('.')[0] + "_" + '.png'
+    test = cv.cvtColor(image, cv.COLOR_RGB2Lab);
+    cv.imwrite(semb, test)
+    # image = cv.medianBlur(image, 5)
 
-criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 10, 1.0)
-K = 3
-ret, label, center = cv.kmeans(Z, K, None, criteria, 10, cv.KMEANS_RANDOM_CENTERS)
+    image = rgbToCielab(image) * 255
+    cielabImagePathName = imageName.split('.')[0] + "_cielab" + '.png'
+    cv.imwrite(cielabImagePathName, image)
 
-center = np.uint8(center)
-res = center[label.flatten()]
-res2 = res.reshape(image.shape)
+    image = cv.imread(cielabImagePathName)
+    # os.remove(cielabImagePathName)
 
-height, width, _ = image.shape
+    Z = image.reshape((-1, 3))
+    Z = np.float32(Z)
 
-diseaseCenter = center[0]
+    criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 10, 1.0)
+    K = 3
+    ret, label, center = cv.kmeans(Z, K, None, criteria, 10, cv.KMEANS_RANDOM_CENTERS)
 
-if np.sum([255, 255, 255] - center[1]) < np.sum([255, 255, 255] - diseaseCenter):
-    diseaseCenter = center[1]
+    center = np.uint8(center)
+    res = center[label.flatten()]
+    res2 = res.reshape(image.shape)
 
-if np.sum([255, 255, 255] - center[2]) < np.sum([255, 255, 255] - diseaseCenter):
-    diseaseCenter = center[2]
+    height, width, _ = image.shape
 
-diseasePixels = np.zeros((height, width, 3), np.uint8) + 255
+    diseaseCenter = center[0]
 
-for i in range(height):
-    for j in range(width):
-        if np.array_equal(res2[i, j], diseaseCenter):
-            diseasePixels[i, j] = [0, 0, 0]
+    if np.sum([255, 255, 255] - center[1]) < np.sum([255, 255, 255] - diseaseCenter):
+        diseaseCenter = center[1]
 
-cv.imwrite(imageName.split('.')[0] + 'result' + '.png', diseasePixels)
-# show_image(diseasePixels)
+    if np.sum([255, 255, 255] - center[2]) < np.sum([255, 255, 255] - diseaseCenter):
+        diseaseCenter = center[2]
 
+    diseasePixels = np.zeros((height, width, 3), np.uint8) + 255
+    diseasePixelsCount = 0
+
+    for i in range(height):
+        for j in range(width):
+            if np.array_equal(res2[i, j], diseaseCenter):
+                diseasePixels[i, j] = [0, 0, 0]
+                diseasePixelsCount += 1
+
+    image_result_path = imageName.split('.')[0] + 'result' + '.png'
+
+    cv.imwrite(image_result_path, diseasePixels)
+
+    percentage_of_leaf_infected = (diseasePixelsCount / (leaf_pixel_count * 1.0)) * 100
+
+    # print diseasePixelsCount * float(pixel_size)
+
+    return image_result_path, percentage_of_leaf_infected, diseasePixelsCount * float(pixel_size)

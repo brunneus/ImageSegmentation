@@ -1,7 +1,5 @@
 import cv2 as cv
 import numpy as np
-from matplotlib import pyplot as plt
-
 
 def removeBackground(image):
     gray_image = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
@@ -12,12 +10,15 @@ def removeBackground(image):
 
     leaf_pixels = np.zeros((height, width, 3), np.uint8) + 255
 
+    leaf_pixels_count = 0
+
     for i in range(height):
         for j in range(width):
             if th2[i, j] != 255:
                 leaf_pixels[i, j] = image[i, j]
+                leaf_pixels_count += 1
 
-    return leaf_pixels
+    return leaf_pixels, leaf_pixels_count
 
 
 def remove_by_k_means(image):
